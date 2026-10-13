@@ -1,10 +1,10 @@
 [package]
-name = "ureq"
+name = "swnb-ureq"
 version = "2.12.1"
 authors = ["Martin Algesten <martin@algesten.se>", "Jacob Hoffman-Andrews <ureq@hoffman-andrews.com>"]
-description = "Simple, safe HTTP client"
+description = "ureq 2.12.1 with an optional TcpConnector hook for cancellable connects (fork used by the Yu handheld Shell)"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/algesten/ureq"
+repository = "https://github.com/swnb/ureq"
 readme = "README.md"
 keywords = ["web", "request", "https", "http", "client"]
 categories = ["web-programming::http-client"]
@@ -14,6 +14,10 @@ exclude = ["/cargo_deny.sh", "/deny.toml", "/test.sh"]
 
 # MSRV
 rust-version = "1.71"
+
+# Keep the upstream crate name in code, tests and examples (`use ureq::...`).
+[lib]
+name = "ureq"
 
 [package.metadata.docs.rs]
 features = ["tls", "native-tls", "json", "charset", "cookies", "socks-proxy", "gzip", "brotli", "http-interop", "http-crate"]

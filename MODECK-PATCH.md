@@ -6,9 +6,11 @@ archive with SHA-256 `02d1a66277ed75f640d608235660df48c8e3c19f3b4edb6a263315626c
 plus one commit that adds an optional `TcpConnector` hook. MIT and
 Apache-2.0 licenses are unchanged.
 
-It is consumed only by the Yu handheld Shell (`yu-store-shell`) as a git
-dependency pinned to a full commit hash. Other crates keep the crates.io
-release; this is deliberately not a global `[patch.crates-io]`.
+It is published on crates.io as `swnb-ureq` (library name `ureq`) and
+consumed only by the Yu handheld Shell (`yu-store-shell`) as
+`ureq = { package = "swnb-ureq", version = "=2.12.1" }`, so builds behind
+a crates.io mirror need no GitHub access. Other crates keep the upstream
+`ureq` release; this is deliberately not a global `[patch.crates-io]`.
 
 ## What changes
 
@@ -31,8 +33,8 @@ acknowledgement agents do not use the hook.
 
 ## Updating
 
-Never force-push or delete a commit that a Yu `Cargo.lock` pins. To move
-to another upstream release, re-apply the three-file change on that tag in
+Never force-push or delete a published commit. To move to another
+upstream release, re-apply the three-file change on that tag in
 a new branch, then re-run real pending-TCP, HTTP/TLS header/body/chunk,
 certificate, redirect and proxy checks, the full Shell suite and the
 production build before switching the pin. A green build alone is not
