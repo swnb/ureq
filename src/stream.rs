@@ -37,6 +37,22 @@ pub trait TlsConnector: Send + Sync {
     ) -> Result<Box<dyn ReadWrite>, crate::error::Error>;
 }
 
+/// Shell-private optional interception of the actual TCP establishment.
+///
+/// The timeout is upstream's remaining per-address budget, not a replacement
+/// HTTP deadline. Return the connected socket; upstream retains its timeout,
+/// TLS/proxy/parser policy. No hook runs unless explicitly set on AgentBuilder.
+pub trait TcpConnector: Send + Sync + fmt::Debug {
+    fn connect(&self, address: &SocketAddr, timeout: Option<Duration>) -> io::Result<TcpStream>;
+
+    /// Wrap only plain HTTP after upstream configured the socket. The default
+    /// owns the same TCP and copies no bytes. Shell uses a cfg(test) observer to
+    /// prove a real Read has entered and not returned; HTTPS keeps its TLS tap.
+    fn wrap_http(&self, stream: TcpStream) -> io::Result<Box<dyn ReadWrite>> {
+        Ok(Box::new(stream))
+    }
+}
+
 pub(crate) struct Stream {
     inner: BufReader<Box<dyn ReadWrite>>,
     /// The remote address the stream is connected to.
@@ -203,6 +219,19 @@ impl Stream {
         stream
     }
 
+    /// A custom HTTP wrapper already owns its box; do not box it a second time.
+    fn new_boxed(
+        inner: Box<dyn ReadWrite>,
+        remote_addr: SocketAddr,
+        pool_returner: PoolReturner,
+    ) -> Stream {
+        Stream::logged_create(Stream {
+            inner: BufReader::new(inner),
+            remote_addr,
+            pool_returner,
+        })
+    }
+
     pub(crate) fn buffer(&self) -> &[u8] {
         self.inner.buffer()
     }
@@ -328,7 +357,12 @@ pub(crate) fn connect_http(unit: &Unit, hostname: &str) -> Result<Stream, Error>
     let port = unit.url.port().unwrap_or(80);
     let pool_key = PoolKey::from_parts("http", hostname, port);
     let pool_returner = PoolReturner::new(&unit.agent, pool_key);
-    connect_host(unit, hostname, port).map(|(t, r)| Stream::new(t, r, pool_returner))
+    let (t, r) = connect_host(unit, hostname, port)?;
+    if let Some(connector) = &unit.agent.config.tcp_connector {
+        Ok(Stream::new_boxed(connector.wrap_http(t)?, r, pool_returner))
+    } else {
+        Ok(Stream::new(t, r, pool_returner))
+    }
 }
 
 pub(crate) fn connect_https(unit: &Unit, hostname: &str) -> Result<Stream, Error> {
@@ -406,6 +440,8 @@ pub(crate) fn connect_host(
                 port,
                 proto.unwrap(),
             )
+        } else if let Some(connector) = &unit.agent.config.tcp_connector {
+            connector.connect(&sock_addr, timeout)
         } else if let Some(timeout) = timeout {
             TcpStream::connect_timeout(&sock_addr, timeout)
         } else {

@@ -9,7 +9,7 @@ use crate::pool::ConnectionPool;
 use crate::proxy::Proxy;
 use crate::request::Request;
 use crate::resolve::{ArcResolver, StdResolver};
-use crate::stream::TlsConnector;
+use crate::stream::{TcpConnector, TlsConnector};
 
 #[cfg(feature = "cookies")]
 use {
@@ -79,6 +79,8 @@ pub(crate) struct AgentConfig {
     pub redirect_auth_headers: RedirectAuthHeaders,
     pub user_agent: String,
     pub tls_config: TlsConfig,
+    /// Shell-private opt-in hook. None preserves upstream TCP establishment.
+    pub tcp_connector: Option<Arc<dyn TcpConnector>>,
 }
 
 /// Agents keep state between requests.
@@ -263,6 +265,7 @@ impl AgentBuilder {
                 redirect_auth_headers: RedirectAuthHeaders::Never,
                 user_agent: format!("ureq/{}", env!("CARGO_PKG_VERSION")),
                 tls_config: TlsConfig(crate::default_tls_config()),
+                tcp_connector: None,
             },
             #[cfg(feature = "proxy-from-env")]
             try_proxy_from_env: true,
@@ -584,6 +587,17 @@ impl AgentBuilder {
     /// ```
     pub fn user_agent(mut self, user_agent: &str) -> Self {
         self.config.user_agent = user_agent.into();
+        self
+    }
+
+    /// Opt into the Shell-private TCP hook after DNS, before any TLS or HTTP.
+    ///
+    /// The connector receives the original address-attempt timeout. Its
+    /// returned socket still gets upstream nodelay/read/write/deadline policy;
+    /// TLS, HTTP parsing, proxy negotiation and pooling are unchanged. Ordinary
+    /// agents, including credential rotation, leave this at its default None.
+    pub fn tcp_connector(mut self, connector: Arc<dyn TcpConnector>) -> Self {
+        self.config.tcp_connector = Some(connector);
         self
     }
 
